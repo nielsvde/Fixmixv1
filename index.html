@@ -1449,7 +1449,14 @@
         rowAddIngredient.style.display = currentFat > 0 && currentFat < targetFat ? 'flex' : 'none';
         if (waterFlushToggleContainer) waterFlushToggleContainer.style.display = (additionType === 'cream') ? 'flex' : 'none';
         rowAddWater.style.display = currentFat > targetFat ? 'flex' : 'none';
-        holdWaterBlock.style.display = 'none';
+
+        if (currentFat > 0 && currentFat < targetFat) {
+          const uncorrectedDiffFat = ((activeBatchSize * targetFat) / 100) - currentFatKg;
+          waterToHoldNext = Math.abs(uncorrectedDiffFat) / (targetFat / 100);
+          holdWaterBlock.style.display = 'block';
+        } else {
+          holdWaterBlock.style.display = 'none';
+        }
 
         stepsHtml = `
           <div class="calc-step">
