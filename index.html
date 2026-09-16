@@ -271,7 +271,7 @@
     }
   </script>
 </head>
-<body onload="loadSettings(); updateDateInformation();">
+<body>
 
 <div class="card">
   <div class="header-container">
@@ -1145,7 +1145,6 @@
     const isUnknown = missingComponent === 'unknown';
     const isReprocess = missingComponent === 'reprocess_missing';
 
-    errorSection.innerHTML = '';
     actualBatchBlock.style.display = isUnknown ? 'none' : 'block';
     actualBatchDetailsSection.style.display = isUnknown ? 'none' : 'block';
     step2Title.innerText = '2. Correctieberekening (Stap voor stap)';
@@ -1348,181 +1347,293 @@
       } else if (isLessCause && currentFat > targetFat) {
         hasError = true;
         errorSection.innerHTML = `<div class="error-box"><strong>⚠️ Onmogelijke combinatie!</strong><br>Gemeten vetgehalte (${currentFat.toFixed(2)}%) is te hoog voor deze oorzaak. Moet lager zijn dan ${targetFat.toFixed(2)}%.</div>`;
+      } else if (currentFat < targetFat && additionType === 'cream' && effectiveCreamFat <= targetFat && effectiveCreamFat > 0) {
+        hasError = true;
+        errorSection.innerHTML = `<div class="error-box"><strong>⚠️ Ongeldig vetgehalte!</strong><br>Room vetgehalte (${effectiveCreamFat.toFixed(2)}%) moet hoger zijn dan gewenst vetgehalte (${targetFat.toFixed(2)}%).</div>`;
+      } else {
+        errorSection.innerHTML = '';
       }
-    }
-
-    if (hasError) {
-      standardResultsBlock.style.display = 'none';
-      document.getElementById('standardFatAnalysisBlock').style.display = 'none';
-      if (unknownCurrentBatchFatBlock) unknownCurrentBatchFatBlock.style.display = 'none';
-      document.getElementById('extraParametersResultBlock').style.display = 'none';
-      document.getElementById('calcSteps').innerHTML = '<p style="margin:0; color:#666;">Los de fout op om de berekening te bekijken.</p>';
-      return;
-    }
-
-    standardResultsBlock.style.display = 'block';
-
-    const currentFatKg = (activeBatchSize * currentFat) / 100;
-
-    if (isUnknown) {
-      document.getElementById('standardFatAnalysisBlock').style.display = 'none';
-      if (unknownCurrentBatchFatBlock) unknownCurrentBatchFatBlock.style.display = 'block';
-      
-      const targetFatKgCurrent = (inputBatchSize * targetFat) / 100;
-      const diffFatKgCurrent = currentFatKg - targetFatKgCurrent;
-
-      document.getElementById('rowCurrentFatKg').style.display = 'flex';
-      document.getElementById('currentFatKgVal').innerText = currentFatKg.toFixed(2) + ' kg';
-      
-      document.getElementById('rowTargetFatCurrentBatchKg').style.display = 'flex';
-      document.getElementById('targetFatCurrentBatchKgVal').innerText = targetFatKgCurrent.toFixed(2) + ' kg';
-
-      document.getElementById('rowDiffFatCurrentBatchKg').style.display = 'flex';
-      const diffCurrentEl = document.getElementById('diffFatCurrentBatchKgVal');
-      diffCurrentEl.innerText = (diffFatKgCurrent > 0 ? '+' : '') + diffFatKgCurrent.toFixed(2) + ' kg';
-      diffCurrentEl.style.color = diffFatKgCurrent > 0 ? '#c0392b' : (diffFatKgCurrent < 0 ? '#27ae60' : 'inherit');
     } else {
-      document.getElementById('standardFatAnalysisBlock').style.display = 'block';
-      if (unknownCurrentBatchFatBlock) unknownCurrentBatchFatBlock.style.display = 'none';
-      document.getElementById('currentFatKgStandardVal').innerText = currentFatKg.toFixed(2) + ' kg';
+      errorSection.innerHTML = '';
     }
 
-    if (currentFat < targetFat) {
-      if (effectiveCreamFat <= targetFat) {
-        errorSection.innerHTML = `<div class="error-box"><strong>⚠️ Ongeldig vetgehalte!</strong><br>Het vetgehalte van de toevoeging (${effectiveCreamFat.toFixed(2)}%) moet hoger zijn dan het doelvetgehalte (${targetFat.toFixed(2)}%).</div>`;
-        standardResultsBlock.style.display = 'none';
-        document.getElementById('standardFatAnalysisBlock').style.display = 'none';
-        if (unknownCurrentBatchFatBlock) unknownCurrentBatchFatBlock.style.display = 'none';
-        document.getElementById('extraParametersResultBlock').style.display = 'none';
-        return;
+    if (!hasError && activeBatchSize > 0 && targetFat > 0) {
+      if (isUnknown) {
+        if (currentFat > 0 && currentFat < targetFat) {
+          if (additionType === 'cream' && effectiveCreamFat > targetFat) {
+            if (useWaterFlush && waterFlushKg > 0) {
+              addAmount = ((targetFat - currentFat) * activeBatchSize + waterFlushKg * targetFat) / (effectiveCreamFat - targetFat) + waterFlushKg;
+            } else {
+              addAmount = ((targetFat - currentFat) / (effectiveCreamFat - targetFat)) * activeBatchSize;
+            }
+          } else if (additionType === 'fat') {
+            addAmount = ((targetFat - currentFat) / (100 - targetFat)) * activeBatchSize;
+          }
+        } else if (currentFat > targetFat) {
+          waterToAdd = ((currentFat / targetFat) - 1) * activeBatchSize;
+        }
+      } else {
+        if (currentFat < targetFat && !isReprocess) {
+          if (additionType === 'cream' && effectiveCreamFat > targetFat) {
+            if (useWaterFlush && waterFlushKg > 0) {
+              addAmount = ((targetFat - currentFat) * activeBatchSize + waterFlushKg * targetFat) / (effectiveCreamFat - targetFat) + waterFlushKg;
+            } else {
+              addAmount = ((targetFat - currentFat) / (effectiveCreamFat - targetFat)) * activeBatchSize;
+            }
+          } else if (additionType === 'fat') {
+            addAmount = ((targetFat - currentFat) / (100 - targetFat)) * activeBatchSize;
+          }
+        } else if (currentFat > targetFat && !isReprocess) {
+          waterToAdd = ((currentFat / targetFat) - 1) * activeBatchSize;
+        }
       }
+    }
 
-      addAmount = (activeBatchSize * (targetFat - currentFat)) / (effectiveCreamFat - targetFat);
+    const finalBatchSizeStandard = activeBatchSize + addAmount + waterToAdd;
 
-      if (additionType === 'cream' && useWaterFlush && waterFlushKg > 0) {
-        addAmount += waterFlushKg;
+    let currentFatKg = 0, targetFatCurrentBatchKg = 0, diffFatCurrentBatchKg = 0;
+    let targetFatKgStandard = 0, diffFatKgStandard = 0;
+
+    if (activeBatchSize > 0 && targetFat > 0) {
+      currentFatKg = (activeBatchSize * currentFat) / 100;
+      targetFatCurrentBatchKg = (activeBatchSize * targetFat) / 100;
+      diffFatCurrentBatchKg = currentFatKg - targetFatCurrentBatchKg;
+      
+      targetFatKgStandard = (finalBatchSizeStandard * targetFat) / 100;
+      
+      if (missingComponent === 'water_less') {
+        diffFatKgStandard = 0;
+      } else {
+        diffFatKgStandard = currentFatKg - targetFatKgStandard;
       }
+    }
 
-      waterToAdd = 0;
-      waterToHoldNext = 0;
+    document.getElementById('currentFatKgVal').innerText = currentFatKg > 0 ? (currentFatKg.toFixed(2) + ' kg') : '0 kg';
+    document.getElementById('currentFatKgStandardVal').innerText = currentFatKg > 0 ? (currentFatKg.toFixed(2) + ' kg') : '0 kg';
+    document.getElementById('targetFatCurrentBatchKgVal').innerText = targetFatCurrentBatchKg > 0 ? (targetFatCurrentBatchKg.toFixed(2) + ' kg') : '0 kg';
+    
+    const diffCurrentEl = document.getElementById('diffFatCurrentBatchKgVal');
+    if (diffFatCurrentBatchKg < 0) {
+      diffCurrentEl.innerText = diffFatCurrentBatchKg.toFixed(2) + ' kg';
+      diffCurrentEl.style.color = '#c0392b';
+    } else if (diffFatCurrentBatchKg > 0) {
+      diffCurrentEl.innerText = '+' + diffFatCurrentBatchKg.toFixed(2) + ' kg';
+      diffCurrentEl.style.color = '#27ae60';
+    } else {
+      diffCurrentEl.innerText = '0.00 kg';
+      diffCurrentEl.style.color = 'var(--primary)';
+    }
 
-      rowAddIngredient.style.display = 'flex';
-      if (waterFlushToggleContainer) waterFlushToggleContainer.style.display = additionType === 'cream' ? 'flex' : 'none';
-      if (addTooltipIcon) addTooltipIcon.style.display = 'inline-flex';
-      rowAddWater.style.display = 'none';
-      holdWaterBlock.style.display = 'none';
+    const standardFatBlock = document.getElementById('standardFatAnalysisBlock');
 
-      const finalBatch = activeBatchSize + addAmount;
-      const targetFatKg = (finalBatch * targetFat) / 100;
-      const diffFatKg = targetFatKg - currentFatKg;
+    if (addTooltipIcon) addTooltipIcon.style.display = (additionType === 'cream' || (missingComponent === 'water_more' && waterMoreIngredient === 'cream') || (missingComponent === 'unknown' && unknownIngredient === 'cream')) ? 'inline-flex' : 'none';
 
-      if (!isUnknown) {
-        document.getElementById('targetFatKgVal').innerText = targetFatKg.toFixed(2) + ' kg';
+    if (!hasError && activeBatchSize > 0) {
+      if (isUnknown) {
+        standardFatBlock.style.display = 'block';
+        document.getElementById('targetFatKgVal').innerText = targetFatKgStandard.toFixed(2) + ' kg';
+        
         const diffFatEl = document.getElementById('diffFatKgVal');
-        diffFatEl.innerText = '+' + diffFatKg.toFixed(2) + ' kg';
-        diffFatEl.style.color = '#27ae60';
-      }
+        if (diffFatKgStandard < 0) {
+          diffFatEl.innerText = diffFatKgStandard.toFixed(2) + ' kg';
+          diffFatEl.style.color = '#c0392b';
+        } else if (diffFatKgStandard > 0) {
+          diffFatEl.innerText = '+' + diffFatKgStandard.toFixed(2) + ' kg';
+          diffFatEl.style.color = '#27ae60';
+        } else {
+          diffFatEl.innerText = '0.00 kg';
+          diffFatEl.style.color = 'var(--primary)';
+        }
 
-      stepsHtml = `
-        <div class="calc-step">
-          <strong>Stap 1: Berekening tekort aan vet</strong><br>
-          • Aanwezig vet in tank: <strong>${currentFatKg.toFixed(2)} kg</strong> (${currentFat.toFixed(2)}% van ${Math.round(activeBatchSize)} kg)<br>
-          • Gewenst vetgehalte: <strong>${targetFat.toFixed(2)}%</strong>
-        </div>
-        <div class="calc-step">
-          <strong>Stap 2: Berekening toe te voegen ${ingredientName}</strong><br>
-          <span class="calc-formula">Extra ${ingredientName} = (${Math.round(activeBatchSize)} × (${targetFat} - ${currentFat})) / (${effectiveCreamFat} - ${targetFat})</span>
-          • Benodigde ${ingredientName}: <strong>${Math.round(addAmount - (useWaterFlush ? waterFlushKg : 0))} kg</strong><br>
-          ${useWaterFlush ? `• Inclusief <strong>${waterFlushKg} kg waterinspoel</strong> bedraagt de totale dosering: <strong>${Math.round(addAmount)} kg</strong><br>` : ''}
-          👉 <strong>Dosering: Voeg ${Math.round(addAmount)} kg ${ingredientName} toe.</strong>
-        </div>
-        <div class="calc-step">
-          <strong>Stap 3: Eindresultaat</strong><br>
-          • Nieuwe totale batchgrootte: <strong>${Math.round(finalBatch)} kg</strong><br>
-          • Totaal vet in batch: <strong>${targetFatKg.toFixed(2)} kg</strong> (${targetFat.toFixed(2)}%)
-        </div>`;
+        standardResultsBlock.style.display = 'block';
+        rowAddIngredient.style.display = currentFat > 0 && currentFat < targetFat ? 'flex' : 'none';
+        if (waterFlushToggleContainer) waterFlushToggleContainer.style.display = (additionType === 'cream') ? 'flex' : 'none';
+        rowAddWater.style.display = currentFat > targetFat ? 'flex' : 'none';
+        holdWaterBlock.style.display = 'none';
+
+        stepsHtml = `
+          <div class="calc-step">
+            <strong>Stap 1: Situatie na correctie</strong><br>
+            • Doel vetgehalte: <strong>${targetFat.toFixed(2)}%</strong><br>
+            • Berekende toevoeging: <strong>${Math.round(addAmount > 0 ? addAmount : waterToAdd)} kg ${addAmount > 0 ? ingredientName : 'water'}</strong><br>
+            • Totale nieuwe batchgrootte: <strong>${Math.round(finalBatchSizeStandard)} kg</strong>
+          </div>`;
+      } else if (targetFat > currentFat && !isReprocess) {
+        standardFatBlock.style.display = 'block';
+
+        document.getElementById('targetFatKgVal').innerText = targetFatKgStandard.toFixed(2) + ' kg';
+        
+        const diffFatEl = document.getElementById('diffFatKgVal');
+        if (diffFatKgStandard < 0) {
+          diffFatEl.innerText = diffFatKgStandard.toFixed(2) + ' kg';
+          diffFatEl.style.color = '#c0392b';
+        } else if (diffFatKgStandard > 0) {
+          diffFatEl.innerText = '+' + diffFatKgStandard.toFixed(2) + ' kg';
+          diffFatEl.style.color = '#27ae60';
+        } else {
+          diffFatEl.innerText = '0.00 kg';
+          diffFatEl.style.color = 'var(--primary)';
+        }
+
+        standardResultsBlock.style.display = 'block';
+        rowAddIngredient.style.display = 'flex';
+        
+        if (waterFlushToggleContainer) waterFlushToggleContainer.style.display = (additionType === 'cream') ? 'flex' : 'none';
+        rowAddWater.style.display = 'none';
+        
+        const hideHoldWaterCauses = ['cream_less', 'fat_less', 'reprocess_missing'];
+        holdWaterBlock.style.display = hideHoldWaterCauses.includes(missingComponent) ? 'none' : 'block';
+
+        const uncorrectedDiffFat = ((activeBatchSize * targetFat) / 100) - currentFatKg;
+        waterToHoldNext = Math.abs(uncorrectedDiffFat) / (targetFat / 100);
+
+        if (effectiveCreamFat > targetFat || additionType === 'fat') {
+          const effectiveFatWithFlush = (addAmount > 0 && useWaterFlush && additionType === 'cream') ? (((addAmount - waterFlushKg) * effectiveCreamFat) / addAmount).toFixed(2) : effectiveCreamFat.toFixed(2);
+
+          stepsHtml = `
+            <div class="calc-step">
+              <strong>Stap 1: Huidige vs. verwachte situatie na correctie</strong><br>
+              • Huidige tankinhoud: <strong>${Math.round(activeBatchSize)} kg</strong> met <strong>${currentFat.toFixed(2)}%</strong> vet = <strong>${currentFatKg.toFixed(2)} kg vet</strong><br>
+              • Doel vetgehalte na correctie: <strong>${targetFat.toFixed(2)}%</strong><br>
+              • Benodigd vet na toevoeging: <strong>${targetFatKgStandard.toFixed(2)} kg vet</strong><br>
+              • Extra toe te voegen vetmassa: <strong>${Math.abs(diffFatKgStandard).toFixed(2)} kg vet</strong>
+            </div>
+            <div class="calc-step">
+              <strong>Stap 2: Bepaling dosering ${ingredientName}</strong><br>
+              ${useWaterFlush && additionType === 'cream' ? 
+                `• Basisdosering room voor vettekort: <strong>${Math.round(((targetFat - currentFat) / (effectiveCreamFat - targetFat)) * activeBatchSize)} kg</strong><br>
+                • Extra room gecompenseerd voor <strong>${waterFlushKg} kg waterinspoel</strong>: <strong>${Math.round(addAmount - ((targetFat - currentFat) / (effectiveCreamFat - targetFat)) * activeBatchSize - waterFlushKg)} kg</strong><br>
+                • Effectief vetgehalte van room inclusief waterinspoel: <strong>${effectiveFatWithFlush}%</strong><br>
+                👉 <strong>Totale dosering room (incl. inspoel): ${Math.round(addAmount)} kg</strong>` : 
+                `• Formule: <span class="calc-formula">(${targetFat.toFixed(2)} - ${currentFat.toFixed(2)}) / (${effectiveCreamFat.toFixed(2)} - ${targetFat.toFixed(2)}) × ${Math.round(activeBatchSize)}</span><br>
+                👉 <strong>Totale dosering ${ingredientName}: ${Math.round(addAmount)} kg</strong>`}
+            </div>
+            <div class="calc-step">
+              <strong>Stap 3: Nieuwe totaalbalans van de batch</strong><br>
+              • Oude tankinhoud: <strong>${Math.round(activeBatchSize)} kg</strong><br>
+              • Toegevoegd: <strong>+${Math.round(addAmount)} kg</strong> ${ingredientName}<br>
+              • Nieuwe batchgrootte: <strong>${Math.round(finalBatchSizeStandard)} kg</strong><br>
+              • Nieuw berekend vetgehalte: <strong>${targetFat.toFixed(2)}%</strong>
+            </div>`;
+        }
+      } else if (currentFat > targetFat && !isReprocess) {
+        standardFatBlock.style.display = 'block';
+
+        document.getElementById('targetFatKgVal').innerText = targetFatKgStandard.toFixed(2) + ' kg';
+        
+        const diffFatEl = document.getElementById('diffFatKgVal');
+        if (diffFatKgStandard < 0) {
+          diffFatEl.innerText = diffFatKgStandard.toFixed(2) + ' kg';
+          diffFatEl.style.color = '#c0392b';
+        } else if (diffFatKgStandard > 0) {
+          diffFatEl.innerText = '+' + diffFatKgStandard.toFixed(2) + ' kg';
+          diffFatEl.style.color = '#27ae60';
+        } else {
+          diffFatEl.innerText = '0.00 kg';
+          diffFatEl.style.color = 'var(--primary)';
+        }
+
+        standardResultsBlock.style.display = 'block';
+        rowAddIngredient.style.display = 'none';
+        if (waterFlushToggleContainer) waterFlushToggleContainer.style.display = 'none';
+        rowAddWater.style.display = 'flex';
+        holdWaterBlock.style.display = 'none';
+
+        stepsHtml = `
+          <div class="calc-step">
+            <strong>Stap 1: Huidige vs. verwachte situatie na correctie</strong><br>
+            • Huidige tankinhoud: <strong>${Math.round(activeBatchSize)} kg</strong> met <strong>${currentFat.toFixed(2)}%</strong> vet = <strong>${currentFatKg.toFixed(2)} kg vet</strong><br>
+            • Doel vetgehalte: <strong>${targetFat.toFixed(2)}%</strong><br>
+            • Benodigd vet na verdunning: <strong>${targetFatKgStandard.toFixed(2)} kg vet</strong> (geen vetverlies)
+          </div>
+          <div class="calc-step">
+            <strong>Stap 2: Bepaling waterdosering</strong><br>
+            • Formule verdunning: <span class="calc-formula">(Gemeten vet / Doel vet - 1) × Tankinhoud</span><br>
+            • Berekening: <span class="calc-formula">(${currentFat.toFixed(2)} / ${targetFat.toFixed(2)} - 1) × ${Math.round(activeBatchSize)}</span><br>
+            👉 <strong>Toe te voegen water: ${Math.round(waterToAdd)} kg</strong>
+          </div>
+          <div class="calc-step">
+            <strong>Stap 3: Nieuwe totaalbalans van de batch</strong><br>
+            • Oude tankinhoud: <strong>${Math.round(activeBatchSize)} kg</strong><br>
+            • Toegevoegd water: <strong>+${Math.round(waterToAdd)} kg</strong><br>
+            • Nieuwe batchgrootte: <strong>${Math.round(finalBatchSizeStandard)} kg</strong><br>
+            • Nieuw berekend vetgehalte: <strong>${targetFat.toFixed(2)}%</strong>
+          </div>`;
+      } else if (currentFat === targetFat && targetFat > 0) {
+        standardFatBlock.style.display = 'block';
+
+        document.getElementById('targetFatKgVal').innerText = targetFatKgStandard.toFixed(2) + ' kg';
+        
+        const diffFatEl = document.getElementById('diffFatKgVal');
+        diffFatEl.innerText = '0.00 kg';
+        diffFatEl.style.color = 'var(--primary)';
+
+        standardResultsBlock.style.display = 'block';
+        rowAddIngredient.style.display = 'none';
+        if (waterFlushToggleContainer) waterFlushToggleContainer.style.display = 'none';
+        rowAddWater.style.display = 'none';
+        holdWaterBlock.style.display = 'none';
+
+        stepsHtml = `<div class="calc-step"><strong>✅ Het gemeten vetgehalte (${currentFat.toFixed(2)}%) is exact gelijk aan het doelvetgehalte. Er is geen correctie nodig.</strong></div>`;
+      }
 
       document.getElementById('addValue').innerText = Math.round(addAmount) + ' kg';
-      document.getElementById('totalBatch').innerText = Math.round(finalBatch) + ' kg';
-      document.getElementById('calcSteps').innerHTML = stepsHtml;
-
-      updateExtraParametersResults(activeBatchSize, currentFatKg, addAmount, 0, finalBatch, inputDS, inputProtein, inputSucrose, additionType, effectiveCreamFat, targetFat);
-
-    } else if (currentFat > targetFat) {
-      waterToAdd = (activeBatchSize * (currentFat - targetFat)) / targetFat;
-      addAmount = 0;
-
-      rowAddIngredient.style.display = 'none';
-      if (waterFlushToggleContainer) waterFlushToggleContainer.style.display = 'none';
-      rowAddWater.style.display = 'flex';
-
-      const finalBatch = activeBatchSize + waterToAdd;
-      const targetFatKg = (finalBatch * targetFat) / 100;
-
-      if (!isUnknown) {
-        document.getElementById('targetFatKgVal').innerText = targetFatKg.toFixed(2) + ' kg';
-        const diffFatEl = document.getElementById('diffFatKgVal');
-        diffFatEl.innerText = '0.00 kg';
-        diffFatEl.style.color = 'var(--primary)';
-      }
-
-      if (['cream_more', 'fat_more'].includes(missingComponent)) {
-        waterToHoldNext = waterToAdd;
-        holdWaterBlock.style.display = 'block';
-        document.getElementById('waterToHoldNextBatch').innerText = Math.round(waterToHoldNext) + ' kg';
-      } else {
-        holdWaterBlock.style.display = 'none';
-      }
-
-      stepsHtml = `
-        <div class="calc-step">
-          <strong>Stap 1: Berekening overschot aan vet / verdunning</strong><br>
-          • Aanwezig vet in tank: <strong>${currentFatKg.toFixed(2)} kg</strong> (${currentFat.toFixed(2)}% van ${Math.round(activeBatchSize)} kg)<br>
-          • Doel vetgehalte: <strong>${targetFat.toFixed(2)}%</strong>
-        </div>
-        <div class="calc-step">
-          <strong>Stap 2: Berekening toe te voegen water</strong><br>
-          <span class="calc-formula">Water = (${Math.round(activeBatchSize)} × (${currentFat} - ${targetFat})) / ${targetFat}</span>
-          👉 <strong>Dosering: Voeg ${Math.round(waterToAdd)} kg water toe aan de tank.</strong>
-          ${waterToHoldNext > 0 ? `<br><br>⚠️ <strong>Let op:</strong> Omdat er te veel ${missingComponent.startsWith('cream') ? 'room' : 'vet'} is gedoseerd, dient er op de <u>volgende batch</u> <strong>${Math.round(waterToHoldNext)} kg water te worden ingehouden</strong> als je deze batch verdunt met water.` : ''}
-        </div>
-        <div class="calc-step">
-          <strong>Stap 3: Eindresultaat</strong><br>
-          • Nieuwe totale batchgrootte: <strong>${Math.round(finalBatch)} kg</strong><br>
-          • Totaal vet in batch: <strong>${currentFatKg.toFixed(2)} kg</strong> (${targetFat.toFixed(2)}%)
-        </div>`;
-
       document.getElementById('waterToAdd').innerText = Math.round(waterToAdd) + ' kg';
-      document.getElementById('totalBatch').innerText = Math.round(finalBatch) + ' kg';
+      document.getElementById('waterToHoldNextBatch').innerText = Math.round(waterToHoldNext) + ' kg';
+      document.getElementById('totalBatch').innerText = Math.round(finalBatchSizeStandard) + ' kg';
       document.getElementById('calcSteps').innerHTML = stepsHtml;
 
-      updateExtraParametersResults(activeBatchSize, currentFatKg, 0, waterToAdd, finalBatch, inputDS, inputProtein, inputSucrose, 'water', 0, targetFat);
-
+      updateExtraParametersResults(activeBatchSize, currentFatKg, addAmount, waterToAdd, finalBatchSizeStandard, inputDS, inputProtein, inputSucrose, additionType, effectiveCreamFat, targetFat);
     } else {
-      rowAddIngredient.style.display = 'none';
-      if (waterFlushToggleContainer) waterFlushToggleContainer.style.display = 'none';
-      rowAddWater.style.display = 'none';
-      holdWaterBlock.style.display = 'none';
-
-      if (!isUnknown) {
-        document.getElementById('targetFatKgVal').innerText = currentFatKg.toFixed(2) + ' kg';
-        const diffFatEl = document.getElementById('diffFatKgVal');
-        diffFatEl.innerText = '0.00 kg';
-        diffFatEl.style.color = 'var(--primary)';
-      }
-
-      stepsHtml = `
-        <div class="calc-step">
-          <strong>Het gemeten vetgehalte (${currentFat.toFixed(2)}%) is exact gelijk aan het doelvetgehalte (${targetFat.toFixed(2)}%).</strong><br>
-          Er is geen correctie nodig.
-        </div>`;
-
-      document.getElementById('totalBatch').innerText = Math.round(activeBatchSize) + ' kg';
-      document.getElementById('calcSteps').innerHTML = stepsHtml;
-
-      updateExtraParametersResults(activeBatchSize, currentFatKg, 0, 0, activeBatchSize, inputDS, inputProtein, inputSucrose, 'none', 0, targetFat);
+      standardResultsBlock.style.display = 'none';
+      standardFatBlock.style.display = 'none';
+      if (unknownCurrentBatchFatBlock) unknownCurrentBatchFatBlock.style.display = 'none';
+      document.getElementById('extraParametersResultBlock').style.display = 'none';
     }
   }
+
+  window.addEventListener('load', () => {
+    loadSettings();
+    updateDateInformation();
+    onCauseChange();
+    calculateEvap();
+    generateCodes();
+
+    let deferredPrompt;
+    const installBtn = document.getElementById('installBtn');
+    const iosInstruction = document.getElementById('iosInstruction');
+
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+
+    if (isStandalone) {
+      if (installBtn) installBtn.style.display = 'none';
+    } else {
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (installBtn) installBtn.style.display = 'inline-flex';
+      });
+
+      if (installBtn) {
+        installBtn.addEventListener('click', () => {
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(() => {
+              deferredPrompt = null;
+              installBtn.style.display = 'none';
+            });
+          } else if (isIos) {
+            if (iosInstruction) {
+              iosInstruction.style.display = iosInstruction.style.display === 'block' ? 'none' : 'block';
+            }
+          } else {
+            alert("App installatie: gebruik het menu van je browser en kies 'Toevoegen aan startscherm'.");
+          }
+        });
+      }
+    }
+  });
 </script>
 </body>
 </html>
